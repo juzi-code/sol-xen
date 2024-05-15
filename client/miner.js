@@ -51,6 +51,16 @@ async function main() {
         default: 1,
         description: 'Number of runs'
     })
+    .option('walletFile', {
+        alias: 'w',
+        type: 'string',
+        description: '钱包文件名称'
+    })
+    .option('rpc', {
+        alias: 'rpc',
+        type: 'string',
+        description: 'RPC链接'
+    })
         .help()
         .parseSync();
     cmd = yArgs._[0];
@@ -80,6 +90,12 @@ async function main() {
             console.error(e.message);
             process.exit(1);
         }
+    }
+    if (yArgs.walletFile) {
+        process.env.USER_WALLET = process.env.USER_WALLET + yArgs.walletFile;
+    }
+    if (yArgs.rpc) {
+        process.env.ANCHOR_PROVIDER_URL = yArgs.rpc;
     }
     // SETUP SOLANA ENVIRONMENT
     const network = process.env.ANCHOR_PROVIDER_URL || 'localnet';
@@ -152,43 +168,48 @@ async function main() {
         const associateTokenProgram = new web3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
         let currentRun = 1;
         for (let run = 1; run <= runs; run++) {
-            const globalXnRecordNew = await program.account.globalXnRecord.fetch(globalXnRecordAddress);
-            const mintAccounts = {
-                user: user.publicKey,
-                mintAccount: mintAccount.address,
-                userTokenAccount,
-                xnByEth: userEthXnRecordAccount,
-                xnBySol: userSolXnRecordAccount,
-                globalXnRecord: globalXnRecordAddress,
-                tokenProgram: TOKEN_PROGRAM_ID,
-                associateTokenProgram
-            };
-            const mintTx = await program.methods.mintTokens({ address: Array.from(ethAddress20) })
-                .accounts(mintAccounts)
-                .signers([user])
-                .preInstructions([modifyComputeUnits, addPriorityFee])
-                .rpc({ commitment: "processed", skipPreflight: true });
-            // connection.onSignature(mintTx, (...params) => {
-            //    readline.moveCursor(process.stdout, 0, run - currentRun);
-            //    readline.cursorTo(process.stdout, 1);
-            //    process.stdout.write(`.`);
-            //    readline.moveCursor(process.stdout, 0, currentRun - run - 1);
-            // }, 'confirmed')
-            connection.onSignature(mintTx, (...params) => {
-                readline.moveCursor(process.stdout, 0, run - currentRun);
-                readline.cursorTo(process.stdout, 1);
-                process.stdout.write(`X`);
-                readline.moveCursor(process.stdout, 0, currentRun - run - 1);
-                console.log();
-                if (run === runs) {
-                    process.exit(0);
-                }
-            }, 'finalized');
-            const userTokenBalance = await connection.getTokenAccountBalance(userTokenAccount);
-            const totalSupply = await connection.getTokenSupply(mintAccount.address);
-            const userXnRecord = await program.account.userEthXnRecord.fetch(userEthXnRecordAccount);
-            process.stdout.write(`[ ] Tx=${Y}${mintTx}${U}, nonce=${Y}${Buffer.from(globalXnRecordNew.nonce).toString("hex")}${U}, hashes=${Y}${userXnRecord.hashes}${U}, superhashes=${Y}${userXnRecord.superhashes}${U}, balance=${Y}${(userTokenBalance.value.uiAmount || 0).toLocaleString()}${U} supply=${Y}${(totalSupply.value.uiAmount || 0).toLocaleString()}${U}\n`);
-            currentRun++;
+            try {
+                const globalXnRecordNew = await program.account.globalXnRecord.fetch(globalXnRecordAddress);
+                const mintAccounts = {
+                    user: user.publicKey,
+                    mintAccount: mintAccount.address,
+                    userTokenAccount,
+                    xnByEth: userEthXnRecordAccount,
+                    xnBySol: userSolXnRecordAccount,
+                    globalXnRecord: globalXnRecordAddress,
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                    associateTokenProgram
+                };
+                const mintTx = await program.methods.mintTokens({ address: Array.from(ethAddress20) })
+                    .accounts(mintAccounts)
+                    .signers([user])
+                    .preInstructions([modifyComputeUnits, addPriorityFee])
+                    .rpc({ commitment: "processed", skipPreflight: true });
+                // connection.onSignature(mintTx, (...params) => {
+                //    readline.moveCursor(process.stdout, 0, run - currentRun);
+                //    readline.cursorTo(process.stdout, 1);
+                //    process.stdout.write(`.`);
+                //    readline.moveCursor(process.stdout, 0, currentRun - run - 1);
+                // }, 'confirmed')
+                connection.onSignature(mintTx, (...params) => {
+                    readline.moveCursor(process.stdout, 0, run - currentRun);
+                    readline.cursorTo(process.stdout, 1);
+                    process.stdout.write(`X`);
+                    readline.moveCursor(process.stdout, 0, currentRun - run - 1);
+                    console.log();
+                    if (run === runs) {
+                        process.exit(0);
+                    }
+                }, 'processed');
+                // }, 'finalized');
+                const userTokenBalance = await connection.getTokenAccountBalance(userTokenAccount);
+                const totalSupply = await connection.getTokenSupply(mintAccount.address);
+                const userXnRecord = await program.account.userEthXnRecord.fetch(userEthXnRecordAccount);
+                process.stdout.write(`[ ] Tx=${Y}${mintTx}${U}, nonce=${Y}${Buffer.from(globalXnRecordNew.nonce).toString("hex")}${U}, hashes=${Y}${userXnRecord.hashes}${U}, superhashes=${Y}${userXnRecord.superhashes}${U}, balance=${Y}${(userTokenBalance.value.uiAmount || 0).toLocaleString()}${U} supply=${Y}${(totalSupply.value.uiAmount || 0).toLocaleString()}${U}\n`);
+                currentRun++;
+            }catch (e){
+                console.loge
+            }
         }
         await new Promise(resolve => setTimeout(resolve, 30_000));
     }
